@@ -62,9 +62,8 @@ parameters:
   generate: expression
   from: '[a-zA-Z0-9]{32}'
 - name: APP_DB_USERNAME
-  value: 
+  value: app
 - name: APP_DB_NAME
   value: app
 - name: APP_DB_PASSWORD
-  generate: expression
-  from: '[a-zA-Z0-9]{32}'
+  value: password

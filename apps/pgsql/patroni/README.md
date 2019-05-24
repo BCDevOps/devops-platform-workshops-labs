@@ -18,25 +18,22 @@ oc new-project patroni-test
 oc process -f openshift/build.yaml -p "GIT_URI=$(git config --get remote.origin.url)" -p "GIT_REF=$(git rev-parse --abbrev-ref HEAD)" -p VERSION=v10-latest | oc apply -f -
 
 # Trigger a build
-oc start-build patroni-001
+oc start-build patroni
 
-#HINT: avoid unecessary commits and build from current git clone/checkout directory.
-#oc start-build patroni-001 "--from-dir=$(git rev-parse --show-toplevel)" --wait
+#oc tag patroni:v10-latest patroni:v10-stable
 
-#oc tag patroni-001:v10-latest patroni-001:v10-stable
+oc process -f openshift/deployment-prereq.yaml -p NAME=patroni | oc apply -f -
 
-oc process -f openshift/deployment-prereq.yaml -p SUFFIX=-001 -p NAME=patroni | oc apply -f -
+oc process -f openshift/deployment.yaml -p "IMAGE_STREAM_NAMESPACE=$(oc project -q)" -p "IMAGE_STREAM_TAG=patroni:v10-latest" -p NAME=patroni | oc apply -f -
 
-oc process -f openshift/deployment.yaml -p "IMAGE_STREAM_NAMESPACE=$(oc project -q)" -p "IMAGE_STREAM_TAG=patroni:v10-latest" -p SUFFIX=-001  -p NAME=patroni | oc apply -f -
-
-oc delete configmap,statefulset,service,endpoints -l cluster-name=patroni-001
+oc delete configmap,statefulset,service,endpoints -l cluster-name=patroni
 
 oc scale StatefulSet/patroni-001 --replicas=1 --timeout=1m
-oc scale StatefulSet/patroni-001 --replicas=0 --timeout=1m && oc delete configmap/patroni-001-config
+oc scale StatefulSet/patroni-001 --replicas=0 --timeout=1m && oc delete configmap/patroni-config
 
 # Clean everthing
-oc delete all -l cluster-name=patroni-001
-oc delete pvc,secret,configmap,rolebinding,role -l cluster-name=patroni-001
+oc delete all -l cluster-name=patroni
+oc delete pvc,secret,configmap,rolebinding,role -l cluster-name=patroni
 
 ```
 
