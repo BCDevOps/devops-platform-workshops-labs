@@ -6,80 +6,76 @@ Patroni can be run in OpenShift. Based on the kubernetes configuration, the Dock
 
 # Examples
 
-## Create test project
+## Build the image in your tools namespace
 
+``` bash
+oc process -f openshift/build.yaml \
+ -p GIT_URI=https://github.com/{gitUserName}/devops-platform-workshops-labs \
+ -p GIT_REF={gitUserName}-201 \
+ -p VERSION=v10-latest | oc apply -f - -n {namespace}-tools
 ```
-oc new-project patroni-test
+
+Once the build has completed, you can tag this build as stable as well
+
+``` bash
+oc tag patroni-001:v10-latest patroni-001:v10-stable
 ```
 
-## Build the image
+## Create an environment file to hold parameters
+You will need to pass parameters to the templates and an easy way to make sure your variables are tracked is to have an environment file for each namespace or deployment.
 
+eg:
+
+``` bash
+cat << EOT > dev.env
+NAME=patroni
+IMAGE_STREAM_TAG=patroni:v10-latest
+PVC_SIZE=1Gi
+APP_DB_NAME=graphana
+APP_DB_USERNAME=graphana
+EOT
 ```
-oc process -f openshift/build.yaml -p "GIT_URI=$(git config --get remote.origin.url)" -p "GIT_REF=$(git rev-parse --abbrev-ref HEAD)" -p VERSION=v10-latest | oc apply -f -
 
-# Trigger a build
-oc start-build patroni
+## Deploy the templates
 
-#oc tag patroni:v10-latest patroni:v10-stable
+The template doesn't have a guaranteed order, so the secrets object will need to be created before the main template is applied.
 
-oc process -f openshift/deployment-prereq.yaml -p NAME=patroni | oc apply -f -
+``` bash
+oc project {namespace-dev}
+oc process -f openshift/deployment-prereq.yaml \
+  --param-file=dev.env --ignore-unknown-parameters=true \
+  | oc apply -f -
 
-oc process -f openshift/deployment.yaml -p "IMAGE_STREAM_NAMESPACE=$(oc project -q)" -p "IMAGE_STREAM_TAG=patroni:v10-latest" -p NAME=patroni | oc apply -f -
+oc process -f openshift/deployment.yaml \
+  --param-file=dev.env --ignore-unknown-parameters=true \
+  | oc apply -f -
+```
 
-oc delete configmap,statefulset,service,endpoints -l cluster-name=patroni
+#### Accessing the image
 
-oc scale StatefulSet/patroni-001 --replicas=1 --timeout=1m
-oc scale StatefulSet/patroni-001 --replicas=0 --timeout=1m && oc delete configmap/patroni-config
+If your image is referencing another private namespace, you will need to add the created ServiceAccount to the image namespace with the `system:image-puller` role.
 
-# Clean everthing
+``` bash
+oc policy add-role-to-user system:image-puller system:serviceaccount:{deploymentNamespace}:patroni \
+  -n {ImageSourceNamespace}
+```
+
+Alternatively, you can export and tag your image from your -tools project after each build.
+
+## Clean Everything
+
+``` bash
 oc delete all -l cluster-name=patroni
-oc delete pvc,secret,configmap,rolebinding,role -l cluster-name=patroni
-
+oc delete secret,configmap,rolebinding,role -l cluster-name=patroni
 ```
 
-## Deploy the Image 
-Two configuration templates exist in [templates](templates) directory: 
-- Patroni Ephemeral
-- Patroni Persistent
-
-The only difference is whether or not the statefulset requests persistent storage. 
-
-## Create the Template
-Install the template into the `openshift` namespace if this should be shared across projects: 
-
-```
-oc create -f templates/template_patroni_ephemeral.yml -n openshift
-oc create -f templates/template_patroni_persistent.yml -n openshift
-
-```
-
-Then, from your own project: 
-
-```
-oc new-app patroni-pgsql-ephemeral
-```
+*Note: The above will NOT remove your PVCs or the manual rolebindings in the -tools project.*
 
 Once the pods are running, two configmaps should be available: 
 
-```
+``` bash
 $ oc get configmap
 NAME                DATA      AGE
 patroniocp-config   0         1m
 patroniocp-leader   0         1m
 ```
-
-## Development
-Install minishift and use the scripts in `test/*` to build/deploy/test
-
-- `test/e2e.sh`: runs all tests
-- `test/build.sh`: Test Build
-- `test/deploy.sh`: Test Deployment
-   - `test/patroni.sh`: Test Patroni
-   - `test/psql.sh`: Test PostgreSQL
-## TODO
-- Need to add anti-affinity rules
-- Investigate using redhat postgres image as base image
-
-## References
-- https://github.com/sclorg/postgresql-container/blob/generated/10/root/usr/bin/run-postgresql
-- https://github.com/sclorg/postgresql-container/blob/generated/10/root/usr/share/container-scripts/postgresql/common.sh
