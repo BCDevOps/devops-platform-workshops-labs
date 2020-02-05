@@ -1,0 +1,13 @@
+FROM registry.access.redhat.com/rhscl/nodejs-8-rhel7
+
+ENV RC_VERSION 0.69.2
+
+RUN : \
+ && source scl_source enable rh-nodejs8 \
+ && set -x \
+ && curl -SLf "https://releases.rocket.chat/${RC_VERSION}/download" -o rocket.chat.tgz \
+ && tar -zxf rocket.chat.tgz -C /opt/app-root/src/ \
+ && cd /opt/app-root/src/bundle/programs/server \
+ && npm install \
+ && rm -rf /opt/app-root/src/rocket.chat.tgz
+ 
