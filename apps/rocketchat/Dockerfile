@@ -14,8 +14,7 @@ LABEL name="Rocket.Chat" \
       run="docker run -d --name ${NAME} ${IMAGE}"
 
 
-# This is ugly... But for some reason npm and node aren't available at this stage.
-ENV PATH /opt/rh/rh-nodejs8/root/usr/bin:/opt/app-root/src/node_modules/.bin/:/opt/app-root/src/.npm-global/bin/:/opt/app-root/src/bin:/opt/app-root/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 
 # RUN set -x \
 #  && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 0E163286C20D07B9787EBE9FD7F9D0414FD08104 \
@@ -26,11 +25,15 @@ ENV PATH /opt/rh/rh-nodejs8/root/usr/bin:/opt/app-root/src/node_modules/.bin/:/o
 #  && cd /opt/app-root/src/bundle/programs/server \
 #  && npm install
 
-RUN set -x \
+RUN : \
+ && source scl_source enable rh-nodejs8 \
+ && set -x \
  && curl -SLf "https://releases.rocket.chat/${RC_VERSION}/download" -o rocket.chat.tgz \
  && tar -zxf rocket.chat.tgz -C /opt/app-root/src/ \
  && cd /opt/app-root/src/bundle/programs/server \
- && npm install
+ && npm ci \
+ && rm -rf /opt/app-root/src/rocket.chat.tgz
+ 
 
 COPY licenses /licenses
 
@@ -51,4 +54,4 @@ ENV DEPLOY_METHOD=docker-redhat \
 
 EXPOSE 3000
 
-CMD ["node", "main.js"]
+CMD ["bash", "-c" "exec node main.js"]
